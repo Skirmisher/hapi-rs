@@ -7,11 +7,18 @@ const HAPI_MAGIC: &[u8] = b"HAPI";
 const HAPI_SAVE_MARKER: &[u8] = b"BANK";
 const HAPI_ARCHIVE_MARKER: &[u8] = &[0x00, 0x00, 0x01, 0x00];
 
-struct HapiArchive {
+pub struct HapiArchive {
+	reader: HapiReader,
+	contents: HapiContents,
+}
+
+struct HapiReader {
 	reader: BufReader<File>,
 	key: u32,
 	start_offset: u32,
 }
+
+struct HapiContents {}
 
 // HAPI header structure: 20 bytes
 #[derive(Debug)]
@@ -24,7 +31,7 @@ struct HapiHeader {
 }
 
 impl HapiArchive {
-	fn parse_header(&mut self) -> io::Result<()> {
+	fn parse_header(reader: &mut BufReader<File>) -> io::Result<HapiHeader> {
 		let mut header = HapiHeader {
 			magic: [0u8; 4],
 			marker: [0u8; 4],
@@ -33,7 +40,7 @@ impl HapiArchive {
 			start_offset: 0u32,
 		};
 
-		self.reader
+		reader
 			.read_exact(&mut header.magic)
 			.map_err(|e: io::Error| {
 				if let io::ErrorKind::UnexpectedEof = e.kind() {
@@ -50,7 +57,7 @@ impl HapiArchive {
 			));
 		}
 
-		self.reader.read_exact(&mut header.marker)?;
+		reader.read_exact(&mut header.marker)?;
 
 		if header.marker == HAPI_SAVE_MARKER {
 			return Err(io::Error::new(
@@ -64,44 +71,44 @@ impl HapiArchive {
 			);
 		}
 
-		header.size = self.reader.read_u32::<LittleEndian>()?;
-		header.key = self.reader.read_u32::<LittleEndian>()?;
-		header.start_offset = self.reader.read_u32::<LittleEndian>()?;
-		self.start_offset = header.start_offset;
+		header.size = reader.read_u32::<LittleEndian>()?;
+		header.key = reader.read_u32::<LittleEndian>()?;
+		header.start_offset = reader.read_u32::<LittleEndian>()?;
 
-		eprintln!("debug: {:x?}", header);
-
-		// Derive cipher key
-		self.key = !((header.key * 4) | (header.key >> 6));
-		eprintln!("debug: cipher key: {:x}", self.key);
-
-		Ok(())
+		Ok(header)
 	}
 
-	fn parse_toc(&mut self) -> io::Result<()> {
+	fn parse_toc(reader: &mut HapiReader, size: u32) -> io::Result<HapiContents> {
 		unimplemented!()
 	}
 
 	pub fn open<P: AsRef<Path>>(path: P) -> io::Result<HapiArchive> {
 		let file = File::open(path)?;
-		let reader = BufReader::new(file);
-		let key = 0u32;
-
-		let mut file = HapiArchive {
-			reader,
-			key,
-			start_offset: 0,
-		};
+		let mut reader = BufReader::new(file);
 
 		// Parse the header
-		file.parse_header()?;
+		let header = HapiArchive::parse_header(&mut reader)?;
+		eprintln!("Debug: {:x?}", header);
 
-		Ok(file)
+		// Derive cipher key
+		let key = !((header.key * 4) | (header.key >> 6));
+		eprintln!("Debug: cipher key: {:x}", key);
+
+		// Create reader
+		let mut reader = HapiReader {
+			reader,
+			key,
+			start_offset: header.start_offset,
+		};
+
+		// Parse table of contents
+		let contents = HapiArchive::parse_toc(&mut reader, header.size)?;
+
+		Ok(HapiArchive { reader, contents })
 	}
 }
 
-impl Read for HapiArchive {
-	/// Only usable once self.open() has completed (that is, all fields are populated).
+impl Read for HapiReader {
 	fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
 		let pos = self.seek(SeekFrom::Current(0))?;
 		// NOTE: replace with stream_position when stable
@@ -123,7 +130,7 @@ impl Read for HapiArchive {
 	}
 }
 
-impl Seek for HapiArchive {
+impl Seek for HapiReader {
 	fn seek(&mut self, pos: SeekFrom) -> Result<u64, io::Error> {
 		self.reader.seek(pos)
 	}
