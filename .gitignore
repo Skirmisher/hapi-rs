@@ -1,2 +1,6 @@
 /target
 **/*.rs.bk
+*.hpi
+*.ufo
+*.ccx
+*.gp3
