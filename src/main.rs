@@ -1,7 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, SeekFrom};
-use std::path::Path;
 
 const HAPI_MAGIC: &[u8] = b"HAPI";
 const HAPI_SAVE_MARKER: &[u8] = b"BANK";
@@ -19,6 +18,7 @@ struct HapiReader<R: Read + Seek> {
 	root_entry_size: usize,
 }
 
+#[derive(Debug)]
 enum HapiEntry {
 	File {
 		name: String,
@@ -32,6 +32,7 @@ enum HapiEntry {
 	},
 }
 
+#[derive(Debug)]
 enum HapiCompressionType {
 	None,
 	Lz77,
@@ -62,6 +63,7 @@ where
 
 		// Parse table of contents
 		let contents = reader.parse_toc()?;
+		eprintln!("Debug: directory tree: {:#?}", contents);
 
 		Ok(HapiArchive { reader, contents })
 	}
@@ -123,7 +125,7 @@ where
 			));
 		} else if header.marker != HAPI_ARCHIVE_MARKER {
 			eprintln!(
-				"Warning: Unexpected value {} in header marker",
+				"Warning: Unexpected value {:x} in header marker",
 				u32::from_le_bytes(header.marker)
 			);
 		}
@@ -136,15 +138,82 @@ where
 	}
 
 	fn parse_toc(&mut self) -> io::Result<HapiContents> {
-		let mut toc = vec![0u8; self.root_entry_size + self.start_offset];
-		self.read_exact(&mut toc[self.start_offset..])?;
-		//eprintln!("Debug: table of contents: {:x}", &toc);
+		// Allocate buffer
+		let mut toc = vec![0u8; self.root_entry_size];
 
-		self.parse_contents(&toc, self.start_offset)
+		// Copy into buffer starting at start_offset so pointers are aligned
+		self.read_exact(&mut toc[self.start_offset..])?;
+		eprintln!("Debug: table of contents: {:x?}", &toc);
+
+		// Begin recursion
+		self.parse_directory(String::from("."), &toc, self.start_offset)
 	}
 
-	fn parse_contents(&mut self, buf: &Vec<u8>, offset: usize) -> io::Result<HapiEntry> {
-		unimplemented!()
+	fn parse_directory(
+		&mut self,
+		name: String,
+		buf: &Vec<u8>,
+		offset: usize,
+	) -> io::Result<HapiEntry> {
+		// Begin reading at offset
+		let mut buf_slice = &buf[offset..];
+
+		// Construct the vector of entries
+		let num_entries = buf_slice.read_u32::<LittleEndian>()? as usize;
+		let mut entries = Vec::with_capacity(num_entries);
+
+		// Jump to list of entries
+		let offset = buf_slice.read_u32::<LittleEndian>()? as usize;
+		let mut buf_slice = &buf[offset..];
+
+		// Parse entries
+		for _ in 0..num_entries {
+			let name_offset = buf_slice.read_u32::<LittleEndian>()? as usize;
+			let name = util::parse_c_string(&buf[name_offset..])?;
+
+			let entry_offset = buf_slice.read_u32::<LittleEndian>()? as usize;
+
+			let is_directory = buf_slice.read_u8()? != 0;
+			entries.push(if is_directory {
+				self.parse_directory(name, buf, entry_offset)?
+			} else {
+				self.parse_file(name, buf, entry_offset)?
+			});
+		}
+
+		Ok(HapiEntry::Directory {
+			name,
+			contents: entries,
+		})
+	}
+
+	fn parse_file(&mut self, name: String, buf: &Vec<u8>, offset: usize) -> io::Result<HapiEntry> {
+		let mut buf = &buf[offset..];
+
+		let offset = buf.read_u32::<LittleEndian>()? as usize;
+		let extracted_size = buf.read_u32::<LittleEndian>()? as usize;
+		let compression = buf.read_u8()?;
+		let compression = match compression {
+			0 => HapiCompressionType::None,
+			1 => HapiCompressionType::Lz77,
+			2 => HapiCompressionType::Deflate,
+			_ => {
+				return Err(io::Error::new(
+					io::ErrorKind::InvalidData,
+					format!(
+						"Invalid compression type {} found for file {}",
+						compression, name
+					),
+				))
+			}
+		};
+
+		Ok(HapiEntry::File {
+			name,
+			offset,
+			extracted_size,
+			compression,
+		})
 	}
 }
 
@@ -154,7 +223,7 @@ impl<R> Read for HapiReader<R>
 where
 	R: Read + Seek,
 {
-	fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
+	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
 		let pos = self.seek(SeekFrom::Current(0))?;
 		// NOTE: replace with stream_position when stable
 
@@ -179,8 +248,23 @@ impl<R> Seek for HapiReader<R>
 where
 	R: Read + Seek,
 {
-	fn seek(&mut self, pos: SeekFrom) -> Result<u64, io::Error> {
+	fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
 		self.inner.seek(pos)
+	}
+}
+
+mod util {
+	pub fn parse_c_string(buf: &[u8]) -> std::io::Result<String> {
+		let end = if let Some(n) = buf.iter().position(|c| *c == 0) {
+			n
+		} else {
+			return Err(std::io::Error::new(
+				std::io::ErrorKind::InvalidData,
+				"String went past end of header",
+			));
+		};
+
+		Ok(String::from_utf8_lossy(&buf[..end]).to_string())
 	}
 }
 
