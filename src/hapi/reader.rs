@@ -50,7 +50,7 @@ enum HapiCompressionType {
 #[derive(Debug)]
 pub(super) struct HapiDirectory {
 	pub(super) name: String,
-	contents: Vec<HapiEntry>,
+	pub(super) contents: Vec<HapiEntry>,
 }
 
 impl HapiDirectory {
@@ -72,9 +72,8 @@ where
 
 		// Derive cipher key
 		let key = if header.key == 0 {
-			let key = None;
 			eprintln!("Debug: data in plain text");
-			key
+			None
 		} else {
 			let key = Some(!((header.key * 4) | (header.key >> 6)));
 			eprintln!("Debug: cipher key: {:x}", key.unwrap());
@@ -136,7 +135,7 @@ where
 		Ok(header)
 	}
 
-	pub fn parse_toc(&mut self) -> io::Result<HapiContents> {
+	pub(super) fn parse_toc(&mut self) -> io::Result<HapiContents> {
 		// Allocate buffer
 		let mut toc = vec![0u8; self.root_entry_size];
 

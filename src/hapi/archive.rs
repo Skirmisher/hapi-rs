@@ -36,7 +36,7 @@ where
 	fn extract_entry<W: Write>(
 		&mut self,
 		entry: &HapiEntry,
-		output: OutputTarget<W>,
+		output: &mut OutputTarget<W>,
 	) -> io::Result<()> {
 		match entry {
 			HapiEntry::File(file) => {
@@ -56,7 +56,7 @@ where
 				if let OutputTarget::Stream(_) = output {
 					panic!("fucko");
 				}
-				for entry in directory.contents {
+				for entry in &directory.contents {
 					self.extract_entry(&entry, output)?;
 				}
 				Ok(())

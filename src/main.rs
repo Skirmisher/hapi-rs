@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
 	io::stdout().write_all(&buf)?;
 	*/
 
-	let file = HapiArchive::open(file)?;
+	let _file = HapiArchive::open(file)?;
 
 	Ok(())
 }
