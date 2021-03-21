@@ -1,11 +1,11 @@
 [package]
 name = "hapi"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Will Springer <skirmisher@protonmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-byteorder = "^1"
+binread = "^2"
 flate2 = { version = "^1", features = ["zlib"], default-features = false }
 lz77-rs = { git = "https://github.com/Skirmisher/lz77-rs" }

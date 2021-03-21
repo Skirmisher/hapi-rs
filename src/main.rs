@@ -1,25 +1,22 @@
-use std::io;
-use std::fs::File;
-use std::env;
 use hapi::HapiArchive;
+// use hapi::HapiReader;
+use std::env;
+use std::error::Error;
+use std::fs::File;
+use std::io::BufReader;
 
-fn main() -> io::Result<()> {
+fn main() -> Result<(), Box<dyn Error>> {
 	let filename = if let Some(s) = env::args().nth(1) {
 		s
 	} else {
-		"totala1.hpi".to_string()
+		"Example.ufo".to_string()
 	};
 	let file = File::open(filename)?;
+	// let file = BufReader::new(file);
+	// let file = HapiReader::new(file)?;
+	let file = HapiArchive::open(file)?;
 
-	/*
-	let reader = BufReader::new(file);
-	let mut reader = hapi::HapiReader::new(reader)?;
-	let mut buf = [0u8; 59285];
-	reader.read_exact(&mut buf);
-	io::stdout().write_all(&buf)?;
-	*/
-
-	let _file = HapiArchive::open(file)?;
+	eprintln!("{:#x?}", file);
 
 	Ok(())
 }
