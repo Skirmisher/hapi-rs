@@ -60,14 +60,14 @@ where
 
 		// Decipher if key is present
 		if let Some(key) = self.header.key {
-			for count in 0..bytes_count {
+			for (count, byte) in buf.iter_mut().enumerate().take(bytes_count) {
 				let offset = pos as u32 + count as u32;
 
 				// Decipher everything except header
 				if offset >= self.header.toc_offset {
 					// This is where the magic happens
 					let char_key = (offset ^ key) as u8;
-					buf[count] = char_key ^ !buf[count];
+					*byte = char_key ^ !*byte;
 				}
 			}
 		}
