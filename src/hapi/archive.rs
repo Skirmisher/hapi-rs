@@ -7,8 +7,6 @@ use binread::BinRead;
 
 use super::*;
 
-const HAPI_CHUNK_SIZE: usize = 65536;
-
 #[derive(Debug)]
 enum OutputTarget<W: Write> {
 	Stream(W),
@@ -68,6 +66,4 @@ where
 	fn extract_file<W: Write>(&mut self, entry: &HapiFile, output: &mut W) -> io::Result<()> {
 		todo!()
 	}
-	
-	
 }
