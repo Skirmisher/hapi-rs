@@ -91,8 +91,7 @@ enum HapiFileContents {
 	Uncompressed(#[br(count = extracted_size)] Vec<u8>),
 	#[br(pre_assert(compression != HapiCompressionType::None))]
 	Compressed(
-		#[br(temp, calc = extracted_size / HAPI_CHUNK_SIZE + (extracted_size % HAPI_CHUNK_SIZE != 0) as u32)]
-		 u32, // number of chunks
+		#[br(temp, calc = (extracted_size + HAPI_CHUNK_SIZE - 1) / HAPI_CHUNK_SIZE)] u32, // number of chunks
 		#[br(temp, count = self_0)] Vec<u32>, // size of each chunk (unnecessary here)
 		#[br(count = self_0)] Vec<HapiCompressedChunk>, // the chunks themselves
 	),
@@ -118,8 +117,8 @@ struct HapiCompressedChunk {
 			data.iter().fold(0, |c: u32, i: &u8| c.wrapping_add(*i as u32)) == checksum,
 			"Chunk had bad checksum (expected {:x}, actual was {:x})",
 			checksum,
-			data.iter().fold(0, |c: u32, i: &u8| c.wrapping_add(*i as u32))),
-		temp
+			data.iter().fold(0, |c: u32, i: &u8| c.wrapping_add(*i as u32))
+		)
 	)]
 	data: Vec<u8>,
 }
