@@ -6,6 +6,6 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-binread = "^2"
-flate2 = { version = "^1", features = ["zlib"], default-features = false }
-lz77-rs = { git = "https://github.com/Skirmisher/lz77-rs" }
+binread = "2"
+libflate = "1"
+rle-decode-fast = "1"

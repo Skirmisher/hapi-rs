@@ -28,7 +28,7 @@ struct HapiHeader {
 
 // Directory: array of indexes to Entries
 #[derive_binread]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[br(little)]
 struct HapiDirectory {
 	#[br(temp)]
@@ -39,7 +39,7 @@ struct HapiDirectory {
 
 // Index: names entry, points to either file or directory data
 #[derive_binread]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[br(little)]
 struct HapiEntryIndex {
 	#[br(parse_with = FilePtr32::parse, map = |str: NullString| str.into_string())]
@@ -51,7 +51,7 @@ struct HapiEntryIndex {
 }
 
 // Entry: either file or directory
-#[derive(Debug, BinRead)]
+#[derive(Debug, BinRead, Clone)]
 #[br(little, import(is_dir: bool))]
 enum HapiEntry {
 	#[br(pre_assert(!is_dir))]
@@ -63,12 +63,12 @@ enum HapiEntry {
 // File entry
 // Compressed case: points to array of chunks
 // Uncompressed case: points to contiguous file data
-#[derive(Debug, BinRead)]
+#[derive(Debug, BinRead, Clone)]
 #[br(little)]
 struct HapiFile {
 	// placeholder args since we are not reading file contents yet
-	#[br(parse_with = FilePtr32::read_options, args(0, HapiCompressionType::None))]
-	contents: FilePtr32<HapiFileContents>,
+	//#[br(parse_with = FilePtr32::read_options, args(0, HapiCompressionType::None))]
+	contents_offset: u32,
 	extracted_size: u32,
 	compression: HapiCompressionType,
 }
