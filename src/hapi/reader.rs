@@ -17,17 +17,13 @@ where
 {
 	pub fn new(mut inner: BufReader<R>) -> Result<HapiReader<R>, Box<dyn Error>> {
 		// Parse header
-		let header = HapiHeader::read(&mut inner);
-		let header = match header {
-			Ok(header) => header,
-			Err(e) => {
-				if let binread::error::Error::BadMagic { .. } = e {
-					return Err(io::Error::new(ErrorKind::InvalidData, "Not a HAPI archive").into());
-				} else {
-					return Err(e.into());
-				}
+		let header = HapiHeader::read(&mut inner).map_err(|e| -> Box<dyn Error> {
+			if let binread::error::Error::BadMagic { .. } = e {
+				io::Error::new(ErrorKind::InvalidData, "Not a HAPI archive").into()
+			} else {
+				e.into()
 			}
-		};
+		})?;
 
 		if header.marker == HAPI_SAVE_MARKER {
 			return Err(
@@ -52,8 +48,7 @@ where
 	R: Read + Seek,
 {
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-		let pos = self.seek(SeekFrom::Current(0))?;
-		// NOTE: replace with stream_position when stable
+		let pos = self.stream_position()?;
 
 		// Read bytes, store count
 		let bytes_count = self.inner.read(buf)?;
