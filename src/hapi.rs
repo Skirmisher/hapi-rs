@@ -30,7 +30,7 @@ struct HapiHeader {
 #[derive_binread]
 #[derive(Debug, Clone)]
 #[br(little)]
-struct HapiDirectory {
+pub struct HapiDirectory {
 	#[br(temp)]
 	count: u32,
 	#[br(parse_with = FilePtr32::parse, count = count)]
@@ -41,19 +41,19 @@ struct HapiDirectory {
 #[derive_binread]
 #[derive(Debug, Clone)]
 #[br(little)]
-struct HapiEntryIndex {
+pub struct HapiEntryIndex {
 	#[br(parse_with = FilePtr32::parse, map = |str: NullString| str.into_string())]
-	name: String,
+	pub name: String,
 	#[br(seek_before = SeekFrom::Current(4), restore_position, temp, map = |flag: u8| flag == 1)]
 	is_dir: bool, // this comes after the entry pointer but we need to pass it to HapiEntry
 	#[br(parse_with = FilePtr32::parse, args(is_dir), pad_after = 1)]
-	entry: HapiEntry,
+	pub entry: HapiEntry,
 }
 
 // Entry: either file or directory
 #[derive(Debug, BinRead, Clone)]
 #[br(little, import(is_dir: bool))]
-enum HapiEntry {
+pub enum HapiEntry {
 	#[br(pre_assert(!is_dir))]
 	File(HapiFile),
 	#[br(pre_assert(is_dir))]
@@ -65,11 +65,11 @@ enum HapiEntry {
 // Uncompressed case: points to contiguous file data
 #[derive(Debug, BinRead, Clone)]
 #[br(little)]
-struct HapiFile {
+pub struct HapiFile {
 	// placeholder args since we are not reading file contents yet
 	//#[br(parse_with = FilePtr32::read_options, args(0, HapiCompressionType::None))]
 	contents_offset: u32,
-	extracted_size: u32,
+	pub extracted_size: u32,
 	compression: HapiCompressionType,
 }
 

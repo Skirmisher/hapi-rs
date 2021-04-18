@@ -9,6 +9,7 @@ use rle_decode_fast::rle_decode;
 
 use super::*;
 use std::fmt::Debug;
+use std::ops::Deref;
 
 const HAPI_LZ77_WINDOW_SIZE: u16 = 4095; // 2^12 - 1
 
@@ -39,19 +40,27 @@ where
 
 		let mut archive = HapiArchive { reader, contents };
 
-		eprintln!("{:#x?}", archive);
+		// eprintln!("{:#x?}", archive);
 
 		// FIXME remove extraction test
-		archive.extract_file(
-			if let HapiEntry::File(file) = &archive.contents.contents[0].entry.clone() {
-				&file
-			} else {
-				panic!()
-			},
-			&mut std::io::stdout(),
-		)?;
+		let file = archive
+			.contents
+			.iter()
+			.find_map(Self::find_file)
+			.expect("no files in archive");
+		archive.extract_file(&file, &mut std::io::stdout());
 
 		Ok(archive)
+	}
+
+	fn find_file(ent: &HapiEntryIndex) -> Option<HapiFile> {
+		match &ent.entry {
+			HapiEntry::File(f) => {
+				eprintln!("{}", ent.name);
+				Some(f.clone())
+			}
+			HapiEntry::Directory(d) => d.iter().find_map(Self::find_file),
+		}
 	}
 
 	#[cfg(fucko)]
@@ -103,6 +112,14 @@ where
 	}
 }
 
+impl Deref for HapiDirectory {
+	type Target = Vec<HapiEntryIndex>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.contents
+	}
+}
+
 #[derive(Debug)]
 struct HapiChunkDecoder<'a> {
 	source: &'a HapiCompressedChunk,
@@ -147,7 +164,7 @@ impl HapiCompressedChunk {
 	fn decompress<W: Write>(&self, output: &mut W) -> Result<(), Box<dyn Error>> {
 		let data = HapiChunkDecoder::new(&self);
 
-		eprintln!("{:#x?}", data);
+		// eprintln!("{:#x?}", data);
 
 		let real_size = match self.compression {
 			HapiCompressionType::None => {
