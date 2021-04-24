@@ -1,4 +1,4 @@
-use hapi::{HapiArchive, HapiFile, HapiDirectory, HapiEntry, HapiEntryIndex};
+use hapi::prelude::*;
 use std::env;
 use std::error::Error;
 use std::fs::File;
