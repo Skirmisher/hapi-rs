@@ -7,19 +7,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
 
 [[package]]
-name = "binread"
-version = "2.1.1"
+name = "array-init"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a883c66db6f3c86b19210ceed1b2b18de64b617c92cb0f0bc90b8c05f18dba87"
+checksum = "6945cc5422176fc5e602e590c2878d2c2acd9a4fe20a4baa7c28022521698ec6"
+
+[[package]]
+name = "binrw"
+version = "0.3.1"
+source = "git+https://github.com/octylFractal/binrw?branch=bugfix/extract-enum-args-once#c38f6f7f3e3fe80ba33d6d5f3e721811ca67e2f6"
 dependencies = [
- "binread_derive",
+ "array-init",
+ "binrw_derive",
 ]
 
 [[package]]
-name = "binread_derive"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c575d9a28eb4c2d61747b23d50271c6699b941448c35a738af35267f90b3d4d2"
+name = "binrw_derive"
+version = "0.2.0"
+source = "git+https://github.com/octylFractal/binrw?branch=bugfix/extract-enum-args-once#c38f6f7f3e3fe80ba33d6d5f3e721811ca67e2f6"
 dependencies = [
  "either",
  "proc-macro2",
@@ -52,7 +57,7 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 name = "hapi"
 version = "0.2.0"
 dependencies = [
- "binread",
+ "binrw",
  "libflate",
  "rle-decode-fast",
 ]

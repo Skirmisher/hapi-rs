@@ -6,6 +6,6 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-binread = "2"
+binrw = { git = "https://github.com/octylFractal/binrw", branch = "bugfix/extract-enum-args-once", version = "0.3" }
 libflate = "1"
 rle-decode-fast = "1"

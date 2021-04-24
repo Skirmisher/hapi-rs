@@ -8,7 +8,9 @@ pub use self::reader::*;
 // ~* common data structures *~
 // =^w^= =^w^= =^w^= =^w^= =^w^=
 
-use binread::{derive_binread, io::SeekFrom, prelude::*, FilePtr32, NullString};
+use binrw::{derive_binread, io::SeekFrom, prelude::*, FilePtr32, NullString};
+use std::path::PathBuf;
+use std::rc::Rc;
 
 const _HAPI_MAGIC: &[u8] = b"HAPI";
 const HAPI_SAVE_MARKER: &[u8] = b"BANK";
@@ -29,54 +31,56 @@ struct HapiHeader {
 // Directory: array of indexes to Entries
 #[derive_binread]
 #[derive(Debug, Clone)]
-#[br(little)]
+#[br(little, import(path: Rc<PathBuf>))]
 pub struct HapiDirectory {
+	#[br(calc = path.clone())]
+	pub path: Rc<PathBuf>,
 	#[br(temp)]
 	count: u32,
-	#[br(parse_with = FilePtr32::parse, count = count)]
-	contents: Vec<HapiEntryIndex>,
+	#[br(parse_with = FilePtr32::parse, count = count, args(path.clone()))]
+	pub contents: Vec<HapiEntryIndex>,
 }
 
 // Index: names entry, points to either file or directory data
 #[derive_binread]
 #[derive(Debug, Clone)]
-#[br(little)]
+#[br(little, import(parent: Rc<PathBuf>))]
 pub struct HapiEntryIndex {
-	#[br(parse_with = FilePtr32::parse, map = |str: NullString| str.into_string())]
-	pub name: String,
+	#[br(parse_with = FilePtr32::parse, map = |str: NullString| parent.join(str.into_string()).into(), temp)]
+	path: Rc<PathBuf>,
 	#[br(seek_before = SeekFrom::Current(4), restore_position, temp, map = |flag: u8| flag == 1)]
 	is_dir: bool, // this comes after the entry pointer but we need to pass it to HapiEntry
-	#[br(parse_with = FilePtr32::parse, args(is_dir), pad_after = 1)]
+	#[br(parse_with = FilePtr32::parse, args(is_dir, path), pad_after = 1)]
 	pub entry: HapiEntry,
 }
 
 // Entry: either file or directory
 #[derive(Debug, BinRead, Clone)]
-#[br(little, import(is_dir: bool))]
+#[br(little, import(is_dir: bool, path: Rc<PathBuf>))]
 pub enum HapiEntry {
 	#[br(pre_assert(!is_dir))]
-	File(HapiFile),
+	File(#[br(args(path.clone()))] HapiFile),
 	#[br(pre_assert(is_dir))]
-	Directory(HapiDirectory),
+	Directory(#[br(args(path.clone()))] HapiDirectory),
 }
 
 // File entry
 // Compressed case: points to array of chunks
 // Uncompressed case: points to contiguous file data
 #[derive(Debug, BinRead, Clone)]
-#[br(little)]
+#[br(little, import(path: Rc<PathBuf>))]
 pub struct HapiFile {
-	// placeholder args since we are not reading file contents yet
-	//#[br(parse_with = FilePtr32::read_options, args(0, HapiCompressionType::None))]
-	contents_offset: u32,
+	#[br(calc = path)]
+	pub path: Rc<PathBuf>,
+	pub contents_offset: u32,
 	pub extracted_size: u32,
-	compression: HapiCompressionType,
+	pub compression: HapiCompressionType,
 }
 
 // How a file is compressed (or not)
 #[derive(Debug, BinRead, PartialEq, Clone, Copy)]
 #[br(repr(u8))]
-enum HapiCompressionType {
+pub enum HapiCompressionType {
 	None = 0,
 	Lz77,
 	Zlib,

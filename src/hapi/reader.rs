@@ -1,13 +1,13 @@
 use std::error::Error;
-use std::io::{self, prelude::*, BufReader, ErrorKind, Read, SeekFrom};
+use std::io::{self, prelude::*, ErrorKind, SeekFrom};
 
-use binread::BinRead;
+use binrw::BinRead;
 
 use super::*;
 
 #[derive(Debug)]
 pub struct HapiReader<R: Read + Seek> {
-	inner: BufReader<R>,
+	inner: R,
 	pub(super) header: HapiHeader,
 }
 
@@ -15,10 +15,10 @@ impl<R> HapiReader<R>
 where
 	R: Read + Seek,
 {
-	pub fn new(mut inner: BufReader<R>) -> Result<HapiReader<R>, Box<dyn Error>> {
+	pub fn new(mut inner: R) -> Result<HapiReader<R>, Box<dyn Error>> {
 		// Parse header
 		let header = HapiHeader::read(&mut inner).map_err(|e| -> Box<dyn Error> {
-			if let binread::error::Error::BadMagic { .. } = e {
+			if let binrw::error::Error::BadMagic { .. } = e {
 				io::Error::new(ErrorKind::InvalidData, "Not a HAPI archive").into()
 			} else {
 				e.into()
