@@ -1,9 +1,9 @@
+use super::*;
+
 use std::error::Error;
 use std::io::{self, prelude::*, ErrorKind, SeekFrom};
 
 use binrw::BinRead;
-
-use super::*;
 
 #[derive(Debug)]
 pub struct HapiReader<R: Read + Seek> {

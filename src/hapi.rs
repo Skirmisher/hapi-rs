@@ -8,9 +8,10 @@ pub use self::reader::*;
 // ~* common data structures *~
 // =^w^= =^w^= =^w^= =^w^= =^w^=
 
-use binrw::{derive_binread, io::SeekFrom, prelude::*, FilePtr32, NullString};
 use std::path::PathBuf;
 use std::rc::Rc;
+
+use binrw::{derive_binread, io::SeekFrom, prelude::*, FilePtr32, NullString};
 
 const _HAPI_MAGIC: &[u8] = b"HAPI";
 const HAPI_SAVE_MARKER: &[u8] = b"BANK";
