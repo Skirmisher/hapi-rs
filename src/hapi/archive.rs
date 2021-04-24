@@ -15,11 +15,15 @@ const HAPI_LZ77_WINDOW_SIZE: u16 = 4095; // 2^12 - 1
 
 #[derive(Debug)]
 pub struct HapiArchive<R: Read + Seek> {
-	reader: RefCell<HapiReader<R>>,
+	pub reader: RefCell<HapiReader<R>>,
 	pub contents: HapiDirectory,
 }
 
 impl HapiDirectory {
+	pub fn path_str(&self) -> &str {
+		self.path.to_str().unwrap()
+	}
+
 	pub fn name(&self) -> &str {
 		// SAFETY: NullString -> String conversion already replaced invalid UTF-8
 		self.path.file_name().map_or("", |s| s.to_str().unwrap())
@@ -27,6 +31,10 @@ impl HapiDirectory {
 }
 
 impl HapiFile {
+	pub fn path_str(&self) -> &str {
+		self.path.to_str().unwrap()
+	}
+
 	pub fn name(&self) -> &str {
 		// SAFETY: NullString -> String conversion already replaced invalid UTF-8
 		self.path.file_name().map_or("", |s| s.to_str().unwrap())
@@ -45,33 +53,28 @@ where
 		reader.seek(SeekFrom::Start(reader.header.toc_offset as u64))?;
 		let contents = HapiDirectory::read_args(&mut reader, (PathBuf::from(".").into(),))?;
 
-		let archive = HapiArchive {
+		Ok(HapiArchive {
 			reader: RefCell::new(reader),
 			contents,
-		};
-
-		// eprintln!("{:#x?}", archive);
-
-		// FIXME remove extraction test
-		let file = archive
-			.contents
-			.contents
-			.iter()
-			.find_map(Self::find_file)
-			.expect("no files in archive");
-		archive.write_file(&file, &mut std::io::stdout())?;
-
-		Ok(archive)
+		})
 	}
 
-	fn find_file(ent: &HapiEntryIndex) -> Option<&HapiFile> {
-		match &ent.entry {
-			HapiEntry::File(f) => {
-				eprintln!("{}", f.path.to_string_lossy());
-				Some(f)
-			}
-			HapiEntry::Directory(d) => d.contents.iter().find_map(Self::find_file),
+	pub fn extract_file(
+		&self,
+		entry: &HapiFile,
+		dest: impl AsRef<Path>,
+	) -> Result<(), Box<dyn Error>> {
+		if !dest.as_ref().metadata()?.is_dir() {
+			return Err(io::Error::new(io::ErrorKind::InvalidInput, "Not a directory").into());
 		}
+
+		let filename = dest.as_ref().join(entry.name());
+
+		eprintln!("Creating file {}", filename.to_str().unwrap());
+
+		let mut file = File::create(filename)?;
+
+		self.write_file(entry, &mut file)
 	}
 
 	pub fn write_file(
@@ -108,11 +111,14 @@ where
 			return Err(io::Error::new(io::ErrorKind::InvalidInput, "Not a directory").into());
 		}
 
+		eprintln!("Extracting to {}", dest.as_ref().to_str().unwrap());
+
 		for ent in &dir.contents {
 			match &ent.entry {
-				HapiEntry::File(file) => todo!(),
+				HapiEntry::File(file) => self.extract_file(file, dest.as_ref())?,
 				HapiEntry::Directory(dir) => {
-					let dest = dest.as_ref().join(&*dir.path); // FIXME check for errant path separators
+					let dest = dest.as_ref().join(dir.name()); // FIXME check for errant path separators
+					eprintln!("Creating dir {}", dest.to_str().unwrap());
 					fs::create_dir_all(&dest)?;
 					self.extract_dir(&dir, dest)?;
 				}
