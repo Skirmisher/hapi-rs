@@ -59,7 +59,6 @@ version = "0.2.0"
 dependencies = [
  "binrw",
  "libflate",
- "rle-decode-fast",
 ]
 
 [[package]]
