@@ -6,7 +6,7 @@ use std::io::{self, prelude::*, ErrorKind, SeekFrom};
 use binrw::BinRead;
 
 #[derive(Debug)]
-pub struct HapiReader<R: Read + Seek> {
+pub(super) struct HapiReader<R: Read + Seek> {
 	inner: R,
 	pub(super) header: HapiHeader,
 }

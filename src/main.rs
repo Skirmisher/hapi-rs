@@ -31,8 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn list_files(dir: &HapiDirectory) {
 	println!("{}", dir.path_str());
 
-	for index in &dir.contents {
-		match &index.entry {
+	for entry in dir {
+		match entry {
 			HapiEntry::File(file) => println!("{}", file.path_str()),
 			HapiEntry::Directory(dir) => list_files(dir),
 		}
@@ -41,25 +41,23 @@ fn list_files(dir: &HapiDirectory) {
 
 fn extract_a_file(archive: &HapiArchive<File>) -> Result<(), Box<dyn Error>> {
 	let file = archive
-		.contents
-		.contents
-		.iter()
+		.contents()
 		.find_map(find_file)
 		.expect("didn't find the file");
 
 	archive.write_file(&file, &mut std::io::stdout())
 }
 
-fn find_file(ent: &HapiEntryIndex) -> Option<&HapiFile> {
-	match &ent.entry {
+fn find_file(ent: &HapiEntry) -> Option<&HapiFile> {
+	match ent {
 		HapiEntry::File(f) => {
 			if f.path_str() == "./gamedata/SIDEDATA.TDF" {
-				eprintln!("{}", f.path.to_string_lossy());
+				eprintln!("{}", f.path_str());
 				Some(f)
 			} else {
 				None
 			}
 		}
-		HapiEntry::Directory(d) => d.contents.iter().find_map(find_file),
+		HapiEntry::Directory(d) => d.into_iter().find_map(find_file),
 	}
 }

@@ -2,7 +2,7 @@ mod archive;
 mod reader;
 
 pub use self::archive::*;
-pub use self::reader::*;
+use self::reader::*;
 
 // =^w^= =^w^= =^w^= =^w^= =^w^=
 // ~* common data structures *~
@@ -11,7 +11,8 @@ pub use self::reader::*;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use binrw::{derive_binread, io::SeekFrom, prelude::*, FilePtr32, NullString};
+use binrw::{derive_binread, prelude::*, FilePtr32, NullString, ReadOptions};
+use std::io::{Read, Seek, SeekFrom};
 
 const _HAPI_MAGIC: &[u8] = b"HAPI";
 const HAPI_SAVE_MARKER: &[u8] = b"BANK";
@@ -30,55 +31,85 @@ struct HapiHeader {
 }
 
 // Directory: array of indexes to Entries
+/// A directory within a [`HapiArchive`].
 #[derive_binread]
 #[derive(Debug, Clone)]
-#[br(little, import(path: Rc<PathBuf>))]
+#[br(little, import(path: PathBuf))]
 pub struct HapiDirectory {
-	#[br(calc = path.clone())]
-	pub path: Rc<PathBuf>,
+	#[br(calc = path.into())]
+	path: Rc<PathBuf>,
 	#[br(temp)]
 	count: u32,
 	#[br(parse_with = FilePtr32::parse, count = count, args(path.clone()))]
-	pub contents: Vec<HapiEntryIndex>,
+	contents: Vec<HapiEntry>,
 }
 
 // Index: names entry, points to either file or directory data
-#[derive_binread]
-#[derive(Debug, Clone)]
-#[br(little, import(parent: Rc<PathBuf>))]
-pub struct HapiEntryIndex {
-	#[br(parse_with = FilePtr32::parse, map = |str: NullString| parent.join(str.into_string()).into(), temp)]
-	path: Rc<PathBuf>,
-	#[br(seek_before = SeekFrom::Current(4), restore_position, temp, map = |flag: u8| flag == 1)]
-	is_dir: bool, // this comes after the entry pointer but we need to pass it to HapiEntry
-	#[br(parse_with = FilePtr32::parse, args(is_dir, path), pad_after = 1)]
-	pub entry: HapiEntry,
+#[derive(Debug, BinRead, Clone)]
+#[br(little)]
+struct HapiEntryIndex {
+	#[br(parse_with = FilePtr32::parse)]
+	name: NullString,
+	entry_offset: u32,
+	#[br(map = |flag: u8| flag == 1)]
+	is_dir: bool,
 }
 
 // Entry: either file or directory
-#[derive(Debug, BinRead, Clone)]
-#[br(little, import(is_dir: bool, path: Rc<PathBuf>))]
+/// An entry within a [`HapiArchive`]: either a file or a directory.
+#[derive(Debug, Clone)]
 pub enum HapiEntry {
-	#[br(pre_assert(!is_dir))]
-	File(#[br(args(path.clone()))] HapiFile),
-	#[br(pre_assert(is_dir))]
-	Directory(#[br(args(path.clone()))] HapiDirectory),
+	File(HapiFile),
+	Directory(HapiDirectory),
+}
+
+impl BinRead for HapiEntry {
+	type Args = (Rc<PathBuf>,);
+
+	fn read_options<R: Read + Seek>(
+		reader: &mut R,
+		options: &ReadOptions,
+		args: Self::Args,
+	) -> BinResult<Self> {
+		let index = HapiEntryIndex::read_options(reader, options, ())?;
+
+		// FIXME this will MISBEHAVE if `name` is empty or weird (e.g. "..")
+		let path = args.0.join(index.name.into_string());
+
+		let old_pos = SeekFrom::Start(reader.stream_position()?);
+		reader.seek(SeekFrom::Start(index.entry_offset as u64))?;
+
+		let entry = if index.is_dir {
+			HapiEntry::Directory(HapiDirectory::read_options(reader, options, (path,))?)
+		} else {
+			HapiEntry::File(HapiFile::read_options(reader, options, (path,))?)
+		};
+
+		reader.seek(old_pos)?;
+		Ok(entry)
+	}
 }
 
 // File entry
 // Compressed case: points to array of chunks
 // Uncompressed case: points to contiguous file data
+/// A file within a [`HapiArchive`].
 #[derive(Debug, BinRead, Clone)]
-#[br(little, import(path: Rc<PathBuf>))]
+#[br(little, import(path: PathBuf))]
 pub struct HapiFile {
 	#[br(calc = path)]
-	pub path: Rc<PathBuf>,
+	path: PathBuf,
+	/// Where the file starts within the archive. (The contents at this location
+	/// depend on if it's compressed or not.)
 	pub contents_offset: u32,
+	/// The size of the decompressed file, in bytes, as reported by the archive.
 	pub extracted_size: u32,
+	/// How the file is compressed, if at all.
 	pub compression: HapiCompressionType,
 }
 
 // How a file is compressed (or not)
+/// A [`HapiFile`]'s compression scheme, or lack thereof.
 #[derive(Debug, BinRead, PartialEq, Clone, Copy)]
 #[br(repr(u8))]
 pub enum HapiCompressionType {
