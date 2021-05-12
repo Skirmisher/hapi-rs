@@ -2,6 +2,8 @@ use crate::hapi::*;
 
 use std::error::Error;
 use std::io::{self, prelude::*};
+use std::iter::Peekable;
+use std::ops::Range;
 
 use libflate::zlib;
 
@@ -97,29 +99,25 @@ impl HapiCompressedChunk {
 						if offset != 0 {
 							let offset = offset - 1; // now it's an array index
 							let count = ((lo & 0x0f) + 2) as usize;
-							if offset + count > HAPI_LZ77_WINDOW_SIZE {
-								if (offset..offset + count).contains(window_iter.peek().unwrap()) {
-									eprintln!(
-										"offset {} count {} pos {}",
-										offset,
-										count,
-										window_iter.peek().unwrap()
-									);
-									return Err(io::Error::new(
-										io::ErrorKind::InvalidData,
-										"LZ77 pointer overlaps with sliding window position??",
-									));
-								} else {
-									// wow I sure hope count > window_iter.len() is never actually valid
-									let window_len = window.len();
-									let after_wrap = offset + count & HAPI_LZ77_WINDOW_SIZE;
-									let before_wrap = count - after_wrap;
-									let dest = *window_iter.peek().unwrap();
-									window.copy_within(offset..window_len, dest);
-									window.copy_within(0..after_wrap, dest + before_wrap);
-									// advance_by isn't stable so Oh Well
-									let _ = window_iter.nth(count - 1);
-								}
+							if (offset..offset + count).contains(window_iter.peek().unwrap()) {
+								// this pointer copy reads what it's writing
+								// no choice but to copy a byte at a time...... hHHrhgHgh
+								Self::lz77_pointer_naive_push(
+									&mut buffer,
+									&mut window,
+									&mut window_iter,
+									offset,
+									count,
+								);
+							} else if offset + count > HAPI_LZ77_WINDOW_SIZE {
+								let window_len = window.len();
+								let after_wrap = offset + count & HAPI_LZ77_WINDOW_SIZE;
+								let before_wrap = count - after_wrap;
+								let dest = *window_iter.peek().unwrap();
+								window.copy_within(offset..window_len, dest);
+								window.copy_within(0..after_wrap, dest + before_wrap);
+								// advance_by isn't stable so Oh Well
+								let _ = window_iter.nth(count - 1);
 							} else if count > window_iter.len() {
 								// flush unwritten window data
 								let data_len = *window_iter.peek().unwrap();
@@ -152,6 +150,30 @@ impl HapiCompressedChunk {
 			} else {
 				return decoder_unexpected_eof;
 			}
+		}
+	}
+
+	fn lz77_pointer_naive_push(
+		buffer: &mut Vec<u8>,
+		window: &mut Vec<u8>,
+		window_iter: &mut Peekable<Range<usize>>,
+		copy_start: usize,
+		copy_count: usize,
+	) {
+		let dest = *window_iter.peek().unwrap();
+		let indexer = (copy_start..copy_start + copy_count).zip(dest..dest + copy_count);
+
+		for (idx_src, idx_dest) in indexer {
+			window[idx_dest & HAPI_LZ77_WINDOW_SIZE] = window[idx_src & HAPI_LZ77_WINDOW_SIZE];
+			if idx_dest == HAPI_LZ77_WINDOW_SIZE {
+				buffer.extend_from_slice(window);
+			}
+		}
+
+		if dest + copy_count > HAPI_LZ77_WINDOW_SIZE {
+			*window_iter = (dest + copy_count & HAPI_LZ77_WINDOW_SIZE..window.len()).peekable();
+		} else {
+			let _ = window_iter.nth(copy_count - 1);
 		}
 	}
 }
