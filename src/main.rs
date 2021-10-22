@@ -45,7 +45,7 @@ fn extract_a_file(archive: &HapiArchive<File>) -> Result<(), Box<dyn Error>> {
 		.find_map(find_file)
 		.expect("didn't find the file");
 
-	archive.write_file(&file, &mut std::io::stdout())
+	archive.write_file(file, &mut std::io::stdout())
 }
 
 fn find_file(ent: &HapiEntry) -> Option<&HapiFile> {

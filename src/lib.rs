@@ -1,3 +1,5 @@
+#![allow(clippy::tabs_in_doc_comments)] // really?
+
 mod hapi;
 
 pub use hapi::*;

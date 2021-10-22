@@ -42,7 +42,7 @@ impl Read for HapiChunkDecoder<'_> {
 
 impl HapiCompressedChunk {
 	pub(super) fn decompress<W: Write>(&self, output: &mut W) -> Result<(), Box<dyn Error>> {
-		let data = HapiChunkDecoder::new(&self);
+		let data = HapiChunkDecoder::new(self);
 
 		let real_size = match self.compression {
 			HapiCompressionType::None => {
@@ -111,7 +111,7 @@ impl HapiCompressedChunk {
 								);
 							} else if offset + count > HAPI_LZ77_WINDOW_SIZE {
 								let window_len = window.len();
-								let after_wrap = offset + count & HAPI_LZ77_WINDOW_SIZE;
+								let after_wrap = (offset + count) & HAPI_LZ77_WINDOW_SIZE;
 								let before_wrap = count - after_wrap;
 								let dest = *window_iter.peek().unwrap();
 								window.copy_within(offset..window_len, dest);
@@ -129,7 +129,7 @@ impl HapiCompressedChunk {
 								// grab what we filled in at the end of the window
 								buffer.extend_from_slice(&window[data_len..]);
 								// reset window iterator
-								window_iter = (data_len + count & HAPI_LZ77_WINDOW_SIZE
+								window_iter = ((data_len + count) & HAPI_LZ77_WINDOW_SIZE
 									..window.len())
 									.peekable();
 							} else {
@@ -171,7 +171,7 @@ impl HapiCompressedChunk {
 		}
 
 		if dest + copy_count > HAPI_LZ77_WINDOW_SIZE {
-			*window_iter = (dest + copy_count & HAPI_LZ77_WINDOW_SIZE..window.len()).peekable();
+			*window_iter = ((dest + copy_count) & HAPI_LZ77_WINDOW_SIZE..window.len()).peekable();
 		} else {
 			let _ = window_iter.nth(copy_count - 1);
 		}

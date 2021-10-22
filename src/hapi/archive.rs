@@ -229,7 +229,7 @@ where
 					let dest = dest.as_ref().join(dir.name()); // FIXME check for errant path separators
 					eprintln!("Creating dir {}", dest.to_str().unwrap());
 					fs::create_dir_all(&dest)?;
-					self.extract_dir(&dir, dest)?;
+					self.extract_dir(dir, dest)?;
 				}
 			}
 		}
