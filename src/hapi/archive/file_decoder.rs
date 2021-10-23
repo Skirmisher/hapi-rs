@@ -63,7 +63,7 @@ impl HapiCompressedChunk {
 		Ok(())
 	}
 
-	fn decode_lz77<W: Write>(&self, input: HapiChunkDecoder, output: &mut W) -> io::Result<u64> {
+	fn decode_lz77<W: Write>(&self, input: HapiChunkDecoder<'_>, output: &mut W) -> io::Result<u64> {
 		let decoder_unexpected_eof = Err(io::Error::new(
 			io::ErrorKind::UnexpectedEof,
 			"LZ77 decoding ended prematurely",

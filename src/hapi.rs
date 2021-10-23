@@ -9,9 +9,8 @@ use self::reader::*;
 // =^w^= =^w^= =^w^= =^w^= =^w^=
 
 use std::path::PathBuf;
-use std::rc::Rc;
 
-use binrw::{derive_binread, prelude::*, FilePtr32, NullString, ReadOptions};
+use binrw::{binread, prelude::*, FilePtr32, NullString, ReadOptions};
 use std::io::{Read, Seek, SeekFrom};
 
 const _HAPI_MAGIC: &[u8] = b"HAPI";
@@ -32,15 +31,15 @@ struct HapiHeader {
 
 // Directory: array of indexes to Entries
 /// A directory within a [`HapiArchive`].
-#[derive_binread]
+#[binread]
 #[derive(Debug, Clone)]
 #[br(little, import(path: PathBuf))]
 pub struct HapiDirectory {
-	#[br(calc = path.into())]
-	path: Rc<PathBuf>,
+	#[br(calc = path)]
+	path: PathBuf,
 	#[br(temp)]
 	count: u32,
-	#[br(parse_with = FilePtr32::parse, count = count, args(path.clone()))]
+	#[br(parse_with = FilePtr32::parse, args { count: count as usize, inner: (path.clone(),) })]
 	contents: Vec<HapiEntry>,
 }
 
@@ -64,7 +63,7 @@ pub enum HapiEntry {
 }
 
 impl BinRead for HapiEntry {
-	type Args = (Rc<PathBuf>,);
+	type Args = (PathBuf,);
 
 	fn read_options<R: Read + Seek>(
 		reader: &mut R,
@@ -73,8 +72,9 @@ impl BinRead for HapiEntry {
 	) -> BinResult<Self> {
 		let index = HapiEntryIndex::read_options(reader, options, ())?;
 
+		let mut path = args.0;
 		// FIXME this will MISBEHAVE if `name` is empty or weird (e.g. "..")
-		let path = args.0.join(index.name.into_string());
+		path.push(index.name.into_string());
 
 		let old_pos = SeekFrom::Start(reader.stream_position()?);
 		reader.seek(SeekFrom::Start(index.entry_offset as u64))?;
@@ -119,7 +119,7 @@ pub enum HapiCompressionType {
 }
 
 // The target of a File entry: either uncompressed data, or a series of compressed chunks
-#[derive_binread]
+#[binread]
 #[derive(Debug)]
 #[br(little, import(extracted_size: u32, compression: HapiCompressionType))]
 enum HapiFileContents {
@@ -134,7 +134,7 @@ enum HapiFileContents {
 }
 
 // Header preceding a chunk of compressed data
-#[derive_binread]
+#[binread]
 #[derive(Debug)]
 #[br(little, magic = b"SQSH")]
 struct HapiCompressedChunk {
